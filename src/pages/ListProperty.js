@@ -1,121 +1,165 @@
 import React, { useState } from 'react';  
-import { Box, Heading, Text, FormControl, FormLabel, Input, Button } from '@chakra-ui/react';  
-import { ethers } from 'ethers';  
-import PropertyNFT from '../artifacts/PropertyNFT.json';  
+import { Web3Provider } from '@ethersproject/providers';  
+import { Contract } from '@ethersproject/contracts';  
+import { parseUnits } from '@ethersproject/units';  
 import axios from 'axios';  
-
-const CONTRACT_ADDRESS = "0x5f38e0c71b4b035edcd2b4daf2f905374cfa47aa";  // Replace with your deployed contract address  
-const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIwODFkY2EzMC00Y2Y5LTRmYzEtYThmYi01MGQxYmQ4MTEwZDYiLCJlbWFpbCI6InJhZGVzYWVlQGt1LmVkdSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiJhMGI3ODdjYjUxZTNhZjVhMGE2ZiIsInNjb3BlZEtleVNlY3JldCI6IjFlNWExMWY1NTc0YzM4OTk4NzgyNzZhNWFlMWIxY2I1Mjk2ZDAyMDVhNTY2Y2MyNDAzM2FhMTJmZWY4MTExZWQiLCJleHAiOjE3NTMzMzUxODV9.QZgI4TI2zexlN2IbvcfRcWjR2viLgM2aLDSrB-S9xo0';  // Replace with your Pinata JWT  
+import { Button, FormControl, FormLabel, Input, Box, Radio, RadioGroup, Stack, Text } from '@chakra-ui/react';  
+import PropertyNFT from '../artifacts/contracts/PropertyNFT.json';  
 
 const ListProperty = () => {  
-    const [address, setAddress] = useState('');  
-    const [walletConnected, setWalletConnected] = useState(false);  
     const [certificate, setCertificate] = useState(null);  
+    const [price, setPrice] = useState('');  
+    const [ownershipPercentage, setOwnershipPercentage] = useState('');  
+    const [role, setRole] = useState('homeowner'); // Default role  
+    const [message, setMessage] = useState('');  
+    const [mintedToken, setMintedToken] = useState(null);  
 
-    const connectWallet = async () => {  
-        if (window.ethereum) {  
-            try {  
-                const provider = new ethers.BrowserProvider(window.ethereum);  
-                const accounts = await provider.send("eth_requestAccounts", []);  
-                setAddress(accounts[0]);  
-                setWalletConnected(true);  
-            } catch (error) {  
-                console.error(error);  
-            }  
-        } else {  
-            alert('Please install MetaMask!');  
-        }  
+    const contractAddress = "0x9229786aace00760e2906f2fc9d504bb7483ddcd";  
+    const provider = new Web3Provider(window.ethereum);  
+    const signer = provider.getSigner();  
+    const contract = new Contract(contractAddress, PropertyNFT.abi, signer);  
+
+    const handleCertificateChange = (e) => {  
+        setCertificate(e.target.files[0]);  
     };  
 
-    const handleCertificateChange = (event) => {  
-        setCertificate(event.target.files[0]);  
+    const handlePriceChange = (e) => {  
+        setPrice(e.target.value);  
+    };  
+
+    const handleOwnershipPercentageChange = (e) => {  
+        setOwnershipPercentage(e.target.value);  
+    };  
+
+    const handleRoleChange = (value) => {  
+        setRole(value);  
     };  
 
     const uploadToPinata = async (file) => {  
-        const formData = new FormData();  
-        formData.append('file', file);  
-
-        const metadata = JSON.stringify({  
-            name: file.name,  
-            keyvalues: {  
-                description: 'Certificate for property listing'  
-            }  
-        });  
-
-        formData.append('pinataMetadata', metadata);  
-
-        const options = JSON.stringify({  
-            cidVersion: 0  
-        });  
-
-        formData.append('pinataOptions', options);  
+        const url = `https://api.pinata.cloud/pinning/pinFileToIPFS`;  
+        let data = new FormData();  
+        data.append('file', file);  
 
         try {  
-            const response = await axios.post('https://api.pinata.cloud/pinning/pinFileToIPFS', formData, {  
-                maxBodyLength: 'Infinity', // Allow infinite size  
+            const res = await axios.post(url, data, {  
+                maxBodyLength: 'Infinity',  
                 headers: {  
-                    'Content-Type': `multipart/form-data; boundary=${formData._boundary}`,  
-                    'Authorization': `Bearer ${PINATA_JWT}`  
+                    'Content-Type': `multipart/form-data; boundary=${data._boundary}`,  
+                    'pinata_api_key': 'b6b9457705f0a7883bcf',  
+                    'pinata_secret_api_key': '75eb3c856f5b6100b2233d3cacca374f483f29cc127551e3d18df6cb39cd771e'  
+                    // Alternatively, you can use JWT for a more secure approach:  
+                    // 'Authorization': `Bearer ${YOUR_JWT_TOKEN}`  
                 }  
             });  
 
-            return response.data;  
+            return res.data.IpfsHash;  
         } catch (error) {  
-            console.error(error);  
-            alert('Failed to upload file to Pinata');  
+            console.error('Error uploading to Pinata:', error);  
+            throw new Error('Failed to upload to Pinata');  
         }  
     };  
 
-    const handleSubmit = async (event) => {  
-        event.preventDefault();  
+    const handleSubmit = async (e) => {  
+        e.preventDefault();  
 
-        if (!certificate) {  
-            alert('Please choose a certificate file');  
-            return;  
+        try {  
+            const certificateHash = await uploadToPinata(certificate);  
+            console.log('Certificate uploaded to Pinata with hash:', certificateHash);  
+
+            const priceInWei = parseUnits(price, 'ether');  
+            const percentage = Number(ownershipPercentage);  
+
+            const txn = await contract.mintProperty(  
+                certificateHash,  
+                priceInWei,  
+                percentage,  
+                await signer.getAddress()  
+            );  
+            console.log('Transaction sent:', txn);  
+
+            const receipt = await txn.wait();  
+            console.log('Transaction mined:', receipt);  
+
+            setMessage('Minted successfully!');  
+
+            contract.on("PropertyMinted", (to, tokenIdStart, tokenIdEnd, certHash, price, ownPercentage) => {  
+                setMintedToken({  
+                    tokenIdStart,  
+                    tokenIdEnd,  
+                    certHash,  
+                    price: price.toString(),  
+                    ownPercentage  
+                });  
+                setMessage(`Minted ${tokenIdEnd - tokenIdStart + 1} tokens for property.`);  
+            });  
+        } catch (error) {  
+            setMessage('Error minting property');  
+            console.error('Error minting property:', error);  
+            console.error('Detailed error:', error.message);  
         }  
+    };  
 
-        const pinataResponse = await uploadToPinata(certificate);  
+    const handleSimulatedMinting = () => {  
+        // Simulate the token minting process  
+        const simulatedMintingProcess = () => {  
+            return new Promise((resolve) => {  
+                setTimeout(() => {  
+                    resolve({ success: true });  
+                }, 2000); // Simulate a delay  
+            });  
+        };  
 
-        if (pinataResponse && pinataResponse.IpfsHash) {  
-            const certificateHash = pinataResponse.IpfsHash;  
-
-            if (window.ethereum) {  
-                const provider = new ethers.BrowserProvider(window.ethereum);  
-                const signer = provider.getSigner();  
-                const contract = new ethers.Contract(CONTRACT_ADDRESS, PropertyNFT.abi, signer);  
-
-                try {  
-                    const tx = await contract.mintProperty(certificateHash, address);  
-                    await tx.wait();  
-                    alert('Property minted successfully');  
-                } catch (error) {  
-                    console.error(error);  
-                    alert('Failed to mint property');  
-                }  
-            } else {  
-                alert('Ethereum object not found');  
-            }  
-        }  
+        simulatedMintingProcess()  
+            .then(() => {  
+                setMessage('It will mint fractional tokens accordingly to the property value, the user put in.');  
+            })  
+            .catch((error) => {  
+                setMessage('Error in simulated minting');  
+                console.error('Error in simulated minting:', error);  
+            });  
     };  
 
     return (  
-        <Box p={5}>  
-            <Heading>List Your Property</Heading>  
-            <Text mt={4}>Connect your wallet to get started:</Text>  
-            <Button onClick={connectWallet} mt={2} mb={4} colorScheme="blue">  
-                {walletConnected ? `Connected: ${address}` : 'Connect Wallet'}  
-            </Button>  
-
+        <Box>  
             <form onSubmit={handleSubmit}>  
                 <FormControl id="certificate" isRequired>  
                     <FormLabel>Property Certificate</FormLabel>  
                     <Input type="file" onChange={handleCertificateChange} />  
                 </FormControl>  
-
+                <FormControl id="price" isRequired mt={4}>  
+                    <FormLabel>Property Price (in ETH)</FormLabel>  
+                    <Input type="text" value={price} onChange={handlePriceChange} />  
+                </FormControl>  
+                <FormControl id="ownershipPercentage" isRequired mt={4}>  
+                    <FormLabel>Ownership Percentage</FormLabel>  
+                    <Input type="number" value={ownershipPercentage} onChange={handleOwnershipPercentageChange} min={1} max={100} />  
+                </FormControl>  
+                <FormControl id="role" isRequired mt={4}>  
+                    <FormLabel>Role</FormLabel>  
+                    <RadioGroup onChange={handleRoleChange} value={role}>  
+                        <Stack direction="row">  
+                            <Radio value="homeowner">Homeowner</Radio>  
+                            <Radio value="developer">Developer</Radio>  
+                        </Stack>  
+                    </RadioGroup>  
+                </FormControl>  
                 <Button mt={4} colorScheme="teal" type="submit">  
                     Mint Property  
                 </Button>  
             </form>  
+            <Button mt={4} colorScheme="blue" onClick={handleSimulatedMinting}>  
+                Simulate Minting  
+            </Button>  
+            {message && <Box mt={4} color={message.includes('Error') ? 'red.500' : 'green.500'}>{message}</Box>}  
+            {mintedToken && (  
+                <Box mt={4} p={4} borderWidth="1px" borderRadius="lg">  
+                    <Text><strong>Token ID Start:</strong> {mintedToken.tokenIdStart}</Text>  
+                    <Text><strong>Token ID End:</strong> {mintedToken.tokenIdEnd}</Text>  
+                    <Text><strong>Certificate Hash:</strong> {mintedToken.certHash}</Text>  
+                    <Text><strong>Price:</strong> {mintedToken.price} wei</Text>  
+                    <Text><strong>Ownership Percentage:</strong> {mintedToken.ownPercentage}%</Text>  
+                </Box>  
+            )}  
         </Box>  
     );  
 };  
